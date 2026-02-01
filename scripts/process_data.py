@@ -18,8 +18,9 @@ def process_everything():
     for f in all_files:
         temp = pd.read_csv(f)
         temp.columns = [c.upper() for c in temp.columns]
-        # Adding Game ID to estimate games played
-        subset = temp[temp['PLAYER_NAME'].isin(players)][['PLAYER_NAME', 'SHOT_MADE', 'SHOT_TYPE', 'GAME_DATE', 'GAME_ID']]
+        subset = temp[temp['PLAYER_NAME'].isin(players)][
+            ['PLAYER_NAME', 'SHOT_MADE', 'SHOT_TYPE', 'GAME_DATE', 'GAME_ID']
+        ]
         df_list.append(subset)
     
     df = pd.concat(df_list).sort_values(['PLAYER_NAME', 'GAME_DATE'])
@@ -32,11 +33,17 @@ def process_everything():
         X = p_df['SHOT_MADE'].values.reshape(-1, 1)
         
         if len(X) > 100:
-            model = hmm.CategoricalHMM(n_components=3, n_iter=200, random_state=42)
-            model.fit(X)
-            states = model.predict(X)
+            model = hmm.CategoricalHMM(
+                n_components=3, n_iter=200, random_state=42
+            )
+
+            # ✅ FIX: respect game boundaries
+            lengths = p_df.groupby('GAME_ID').size().values
+
+            model.fit(X, lengths)
+            states = model.predict(X, lengths)
+
             p_df['HMM_STATE'] = states
-            
             state_means = p_df.groupby('HMM_STATE')['SHOT_MADE'].mean()
             hot_state_label = state_means.idxmax()
             p_df['IS_HOT_ZONE'] = (p_df['HMM_STATE'] == hot_state_label).astype(int)
